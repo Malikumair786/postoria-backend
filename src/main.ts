@@ -1,12 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as winston from 'winston';
-import { WinstonModule } from 'nest-winston';
-import 'winston-daily-rotate-file';
 import { ValidationPipe } from '@nestjs/common';
 import { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import 'winston-daily-rotate-file';
 
 async function bootstrap() {
   const logFormat = winston.format.printf(
@@ -35,18 +33,6 @@ async function bootstrap() {
     //   transports: [transport],
     // }),
   });
-
-  const config = new DocumentBuilder()
-    .setTitle('BinSaeed Ecommerce Store')
-    .setDescription('BinSaeed Ecommerce Store API documentation')
-    .setVersion('1.0.0')
-    .addBearerAuth(
-      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
-      'access-token',
-    )
-    .build();
-  const documentFactory = () => SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, documentFactory);
 
   const corsOptions: CorsOptions = {
     origin: '*',

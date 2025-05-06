@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { CreatePostDto } from 'src/dto/post/create-post.dto';
 import { Post } from 'src/model/post.entity';
 import { CommentService } from './comment.service';
+import { UserService } from './user.service';
 
 @Injectable()
 export class PostsService {
@@ -12,6 +13,7 @@ export class PostsService {
   constructor(
     @InjectModel(Post.name) private postModel: Model<Post>,
     private readonly commentService: CommentService, // Inject CommentService here
+    private readonly userService: UserService
   ) {}
 
   async createPost(userId: string, dto: CreatePostDto): Promise<Post> {
@@ -39,9 +41,10 @@ export class PostsService {
       this.logger.log('Querying visible posts from database...');
       const posts: any = await this.postModel.find({ hidden: false }).sort({ createdAt: -1 }).lean();
   
-      this.logger.log(`Fetched ${posts.length} posts. Retrieving most liked comments...`);
+      this.logger.log(`Fetched ${posts.length} posts. Retrieving most liked comments and user images...`);
   
       for (const post of posts) {
+        // 1. Most liked comment
         try {
           const mostLikedComment = await this.commentService.getMostLikedComment(post._id.toString());
           post.mostLikedComment = mostLikedComment || null;
@@ -49,7 +52,18 @@ export class PostsService {
           this.logger.error(`Failed to fetch most liked comment for post ${post._id}: ${commentErr.message}`);
           post.mostLikedComment = null;
         }
+  
+        // 2. User image
+        try {
+          const user = await this.userService.findUserById(post.userId);
+          post.userImage = user?.profilePicture || null;
+          post.username = user?.username || "";
+        } catch (userErr) {
+          this.logger.error(`Failed to fetch user for post ${post._id}: ${userErr.message}`);
+          post.userImage = null;
+        }
       }
+  
       this.logger.log('Post feed prepared successfully');
       return posts;
     } catch (err) {
@@ -57,6 +71,7 @@ export class PostsService {
       throw new InternalServerErrorException('Failed to retrieve post feed');
     }
   }
+  
 
   async findPostById(postId: string): Promise<Post> {
     this.logger.log(`Finding post with ID: ${postId}`);
@@ -73,6 +88,30 @@ export class PostsService {
     }
   }
 
+  async getUserFeeds(userId: string): Promise<any[]> {
+    this.logger.log(`Fetching feeds for userId: ${userId}`);
+    try {
+      const posts: any[] = await this.postModel.find({ userId }).sort({ createdAt: -1 }).lean();
+
+      for (const post of posts) {
+        try {
+          const mostLikedComment = await this.commentService.getMostLikedComment(post._id.toString());
+          post.mostLikedComment = mostLikedComment || null;
+        } catch (commentErr) {
+          this.logger.warn(`Failed to get most liked comment for post ${post._id}: ${commentErr.message}`);
+          post.mostLikedComment = null;
+        }
+      }
+
+      this.logger.log(`Successfully fetched ${posts.length} posts for user ${userId}`);
+      return posts;
+    } catch (err) {
+      this.logger.error(`Failed to fetch user feeds for userId: ${userId}`, err.stack);
+      throw new InternalServerErrorException('Failed to fetch user feeds');
+    }
+  }
+
+
   async editPost(userId: string, postId: string, text: string, imageUrls: string[]): Promise<Post> {
     this.logger.log(`Editing post with ID: ${postId} by user: ${userId}`);
 
@@ -84,7 +123,7 @@ export class PostsService {
       }
 
       post.text = text || post.text; // Allow partial updates
-      post.imageUrls = imageUrls.length > 0 ? imageUrls : post.imageUrls;
+      post.imageUrls = imageUrls?.length > 0 ? imageUrls : post.imageUrls;
 
       this.logger.log(`Post with ID: ${postId} updated successfully.`);
       return await post.save();

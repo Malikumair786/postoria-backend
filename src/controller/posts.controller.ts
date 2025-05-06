@@ -55,9 +55,22 @@ export class PostsController {
       );
     } catch (err) {
       this.logger.error(`Failed to fetch post feed: ${err.message}`);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json(
-        new ApiResponse(false, ResponseCodes.GENERIC_INTERNAL_SERVER_ERROR, 'Server error')
-      );
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json(new ApiResponse(false, ResponseCodes.GENERIC_INTERNAL_SERVER_ERROR, 'Server error'));
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('my-feeds')
+  async getUserFeeds(@Req() req: any, @Res() res: Response) {
+    const userId = req.user?.userId;
+    this.logger.log(`[getUserFeeds] Received request to fetch feeds for userId: ${userId}`);
+    try {
+      const feeds = await this.postsService.getUserFeeds(userId);
+      this.logger.log(`[getUserFeeds] Successfully fetched ${feeds.length} feed(s) for userId: ${userId}`);
+      return res.status(HttpStatus.OK).json(new ApiResponse(true, ResponseCodes.GENERIC_OK, 'User feeds fetched successfully', feeds));
+    } catch (err) {
+      this.logger.error(`[getUserFeeds] Error occurred while fetching feeds for userId: ${userId}`, err.stack);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json(new ApiResponse(false, ResponseCodes.GENERIC_INTERNAL_SERVER_ERROR, 'Failed to fetch user feeds'));
     }
   }
 
